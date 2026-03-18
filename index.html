@@ -9,7 +9,8 @@
   <meta name="apple-mobile-web-app-title" content="Wordle"/>
   <meta name="mobile-web-app-capable" content="yes"/>
   <link rel="manifest" href="manifest.json"/>
-  <link rel="apple-touch-icon" href="icons/icon-192.png"/>
+  <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png"/>
+  <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512.png"/>
   <title>Wordle Puzzle</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
@@ -863,8 +864,11 @@ function set(id,v) { var e=document.getElementById(id); if(e) e.textContent=v; }
 
 // ─── SERVICE WORKER ───────────────────────────────────────────────────────────
 function registerSW() {
-  if('serviceWorker' in navigator)
-    navigator.serviceWorker.register('sw.js').catch(function(){});
+  if ('serviceWorker' in navigator) {
+    // Use relative path so it works whether hosted at root or in a subdirectory
+    var swPath = new URL('sw.js', window.location.href).href;
+    navigator.serviceWorker.register(swPath, { scope: './' }).catch(function(){});
+  }
 }
 
 // ─── INSTALL ─────────────────────────────────────────────────────────────────

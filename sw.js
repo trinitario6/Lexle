@@ -1,4 +1,4 @@
-// sw.js — cache busted, game.js excluded (logic is inline in index.html)
+// sw.js — all game logic is inline in index.html, no external JS needed
 const CACHE = 'wordle-v4';
 
 const PRECACHE = [

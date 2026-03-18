@@ -1,17 +1,22 @@
-// sw.js — cache name is fixed; browser re-installs when THIS FILE changes byte-for-byte.
-const CACHE = 'wordle-puzzle';
+// sw.js — cache busted, game.js excluded (logic is inline in index.html)
+const CACHE = 'wordle-v4';
 
 const PRECACHE = [
+  './index.html',
+  './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  'https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Nunito+Sans:wght@400;600;700&display=swap',
 ];
 
+// ── INSTALL ───────────────────────────────────────────────────────────────────
 self.addEventListener('install', e => {
   self.skipWaiting();
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE).catch(() => {})));
+  e.waitUntil(
+    caches.open(CACHE).then(c => c.addAll(PRECACHE).catch(() => {}))
+  );
 });
 
+// ── ACTIVATE: delete every other cache ───────────────────────────────────────
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
@@ -20,26 +25,28 @@ self.addEventListener('activate', e => {
   );
 });
 
+// ── FETCH ─────────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // Network-first for HTML, manifest, and same-origin JS
-  const networkFirst = e.request.mode === 'navigate'
-    || url.pathname.endsWith('.html')
-    || url.pathname.endsWith('.json')
-    || url.pathname.endsWith('.js');
 
-  if (networkFirst) {
+  // HTML + manifest: network-first so updates are picked up immediately
+  const isAppShell = e.request.mode === 'navigate' || url.pathname.endsWith('.json');
+  if (isAppShell) {
     e.respondWith(
       fetch(e.request)
         .then(res => { caches.open(CACHE).then(c => c.put(e.request, res.clone())); return res; })
         .catch(() => caches.match(e.request))
     );
-  } else {
-    // Cache-first for icons, fonts, images
-    e.respondWith(
-      caches.match(e.request).then(hit => hit ||
-        fetch(e.request).then(res => { caches.open(CACHE).then(c => c.put(e.request, res.clone())); return res; })
-      )
-    );
+    return;
   }
+
+  // Everything else (icons, fonts): cache-first
+  e.respondWith(
+    caches.match(e.request).then(hit => hit ||
+      fetch(e.request).then(res => {
+        caches.open(CACHE).then(c => c.put(e.request, res.clone()));
+        return res;
+      })
+    )
+  );
 });

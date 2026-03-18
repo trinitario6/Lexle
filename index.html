@@ -382,6 +382,8 @@
 </div>
 
 <script>
+if (window.__WORDLE_LOADED__) { throw new Error('already loaded'); }
+window.__WORDLE_LOADED__ = true;
 // ─── WORDS ────────────────────────────────────────────────────────────────────
 var WORDS = [
   "about","above","abuse","actor","acute","admit","adopt","adult","after","again",

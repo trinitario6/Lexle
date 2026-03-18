@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <meta name="theme-color" content="#1a1a1a"/>
+  <meta name="description" content="Wordle Puzzle – Daily word guessing game"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Wordle"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icons/icon-192.png"/>
+  <title>Wordle Puzzle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg:         #1a1a1a;
+      --bg2:        #212121;
+      --surface:    #2a2a2a;
+      --surface2:   #323232;
+      --tile-empty: #2c2c2c;
+      --tile-border:#3d3d3d;
+      --tile-filled:#383838;
+      --correct:    #5aad52;
+      --correct-lit:#6dc464;
+      --present:    #c9a227;
+      --absent:     #3a3a3a;
+      --absent-txt: #777;
+      --text:       #f0f0f0;
+      --text-dim:   #888;
+      --border:     #404040;
+      --key-bg:     #4a4a4a;
+      --key-text:   #e8e8e8;
+      --shadow:     rgba(0,0,0,0.5);
+      --tile-sz:    min(64px, 13.5vw);
+      --tile-gap:   6px;
+      --radius:     10px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Nunito Sans', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100dvh;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 0 6px;
+      overflow: hidden;
+      /* subtle noise texture overlay */
+      position: relative;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+    }
+
+    /* ── HEADER ── */
+    header {
+      position: relative; z-index: 1;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 6px 8px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .wordmark {
+      display: flex;
+      flex-direction: column;
+      line-height: 1;
+    }
+    .wordmark-title {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: 1.45rem;
+      letter-spacing: 0.06em;
+      color: var(--text);
+    }
+    .wordmark-sub {
+      font-size: 0.6rem;
+      letter-spacing: 0.2em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+
+    .header-btns { display: flex; gap: 8px; }
+    .icon-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px;
+      cursor: pointer;
+      color: var(--text-dim);
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .icon-btn:hover { color: var(--text); background: var(--surface2); }
+    .icon-btn svg { width: 18px; height: 18px; }
+
+    /* ── MINI STATS ── */
+    .mini-stats {
+      position: relative; z-index: 1;
+      display: flex;
+      gap: 20px;
+      padding: 5px 0 4px;
+      flex-shrink: 0;
+    }
+    .ms-item { display: flex; flex-direction: column; align-items: center; gap: 0; }
+    .ms-val { font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 1.05rem; color: var(--text); }
+    .ms-label { font-size: 0.55rem; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed;
+      top: 56px; left: 50%;
+      transform: translateX(-50%) translateY(-8px);
+      background: var(--text);
+      color: var(--bg);
+      font-family: 'Nunito', sans-serif;
+      font-weight: 800;
+      font-size: 0.8rem;
+      letter-spacing: 0.04em;
+      padding: 9px 20px;
+      border-radius: 999px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 999;
+      white-space: nowrap;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── BOARD ── */
+    #board-wrap {
+      position: relative; z-index: 1;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+    }
+
+    #board {
+      display: grid;
+      grid-template-rows: repeat(6, var(--tile-sz));
+      grid-template-columns: repeat(5, var(--tile-sz));
+      gap: var(--tile-gap);
+    }
+
+    .tile {
+      width: var(--tile-sz);
+      height: var(--tile-sz);
+      background: var(--tile-empty);
+      border: 2px solid var(--tile-border);
+      border-radius: var(--radius);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: calc(var(--tile-sz) * 0.5);
+      color: var(--text);
+      user-select: none;
+      position: relative;
+      /* inner bevel effect */
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 6px rgba(0,0,0,0.3);
+      transition: border-color 0.1s;
+    }
+
+    .tile.has-letter {
+      background: var(--tile-filled);
+      border-color: #555;
+      animation: tile-pop 0.08s ease;
+    }
+
+    @keyframes tile-pop {
+      0%   { transform: scale(1); }
+      50%  { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+
+    /* Flip reveal */
+    .tile.flip-in  { animation: flip-in  0.25s ease forwards; }
+    .tile.flip-out { animation: flip-out 0.25s ease forwards; }
+
+    @keyframes flip-in {
+      from { transform: rotateX(0deg); }
+      to   { transform: rotateX(-90deg); }
+    }
+    @keyframes flip-out {
+      from { transform: rotateX(90deg); }
+      to   { transform: rotateX(0deg); }
+    }
+
+    .tile.correct {
+      background: var(--correct);
+      border-color: var(--correct-lit);
+      color: #fff;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 0 12px rgba(90,173,82,0.3), 0 2px 6px rgba(0,0,0,0.3);
+    }
+    .tile.present {
+      background: var(--present);
+      border-color: #ddb840;
+      color: #fff;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 2px 6px rgba(0,0,0,0.3);
+    }
+    .tile.absent {
+      background: var(--absent);
+      border-color: #444;
+      color: var(--absent-txt);
+    }
+
+    /* Row shake */
+    .row-shake {
+      animation: shake 0.35s ease;
+    }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%,60%  { transform: translateX(-5px); }
+      40%,80%  { transform: translateX(5px); }
+    }
+
+    /* Win bounce */
+    .tile.win-bounce { animation: win-bounce 0.5s ease; }
+    @keyframes win-bounce {
+      0%,100% { transform: translateY(0) scale(1); }
+      35%     { transform: translateY(-14px) scale(1.05); }
+      60%     { transform: translateY(-6px) scale(1.02); }
+    }
+
+    /* ── KEYBOARD ── */
+    #keyboard {
+      position: relative; z-index: 1;
+      width: 100%;
+      padding: 4px 0 max(10px, env(safe-area-inset-bottom));
+      flex-shrink: 0;
+    }
+
+    .kb-row {
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+      margin-bottom: 5px;
+    }
+
+    .key {
+      height: 54px;
+      min-width: 30px;
+      flex: 1;
+      max-width: 40px;
+      background: var(--key-bg);
+      border: none;
+      border-radius: 8px;
+      color: var(--key-text);
+      font-family: 'Nunito', sans-serif;
+      font-weight: 800;
+      font-size: 1.25rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 3px 0 rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+      transition: background 0.2s, color 0.2s, transform 0.08s, box-shadow 0.08s;
+      letter-spacing: 0.02em;
+    }
+
+    .key:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.4);
+    }
+
+    .key.wide {
+      max-width: 58px;
+      font-size: 0.88rem;
+      letter-spacing: 0.01em;
+    }
+
+    .key.correct { background: var(--correct); color: #fff; box-shadow: 0 3px 0 #3a7a34, inset 0 1px 0 rgba(255,255,255,0.15); }
+    .key.present { background: var(--present); color: #fff; box-shadow: 0 3px 0 #9a7c1a; }
+    .key.absent  { background: #2e2e2e; color: #555; box-shadow: 0 3px 0 rgba(0,0,0,0.3); }
+
+    /* ── MODALS ── */
+    .overlay {
+      position: fixed; inset: 0;
+      background: rgba(10,10,10,0.8);
+      backdrop-filter: blur(10px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 500;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s;
+    }
+    .overlay.open { opacity: 1; pointer-events: all; }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 26px 22px;
+      width: min(370px, 92vw);
+      max-height: 88dvh;
+      overflow-y: auto;
+      transform: scale(0.94) translateY(10px);
+      transition: transform 0.25s;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    }
+    .overlay.open .modal { transform: scale(1) translateY(0); }
+
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .modal-title {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: 1.1rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+    .modal-close {
+      background: var(--surface2); border: none; border-radius: 6px;
+      color: var(--text-dim); cursor: pointer; padding: 5px 8px;
+      font-size: 1rem; transition: color 0.15s, background 0.15s;
+    }
+    .modal-close:hover { color: var(--text); background: var(--border); }
+
+    .modal p { font-size: 0.78rem; color: var(--text-dim); line-height: 1.75; margin-bottom: 10px; }
+    .modal p strong { color: var(--text); }
+
+    .divider { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+
+    /* How-to examples */
+    .ex-row { display: flex; gap: 5px; margin: 10px 0 6px; }
+    .ex-tile {
+      width: 40px; height: 40px; border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 1.1rem;
+      border: 2px solid var(--tile-border);
+      background: var(--tile-empty); color: var(--text);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+    .ex-tile.correct { background: var(--correct); border-color: var(--correct-lit); color: #fff; }
+    .ex-tile.present { background: var(--present); border-color: #ddb840; color: #fff; }
+    .ex-tile.absent  { background: var(--absent); color: var(--absent-txt); }
+
+    /* Stats grid */
+    .stats-grid { display: flex; justify-content: space-around; margin: 16px 0; }
+    .stat-item { text-align: center; }
+    .stat-num { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 2rem; color: var(--text); line-height: 1; }
+    .stat-label { font-size: 0.58rem; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; }
+
+    /* Guess distribution */
+    .dist { margin: 14px 0; }
+    .dist-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+    .dist-num { font-size: 0.72rem; color: var(--text-dim); width: 10px; text-align: right; flex-shrink: 0; }
+    .dist-bar-wrap { flex: 1; height: 20px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+    .dist-bar {
+      height: 100%; background: var(--absent); border-radius: 4px;
+      display: flex; align-items: center; justify-content: flex-end;
+      padding-right: 6px;
+      font-size: 0.65rem; font-weight: 700; color: var(--text-dim);
+      min-width: 20px;
+      transition: width 0.6s ease;
+    }
+    .dist-bar.highlight { background: var(--correct); color: #fff; }
+
+    /* Buttons */
+    .btn {
+      width: 100%; padding: 14px;
+      border: none; border-radius: 10px;
+      background: var(--correct);
+      color: #fff;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900; font-size: 0.85rem;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      cursor: pointer; margin-top: 12px;
+      box-shadow: 0 3px 0 #3a7a34, inset 0 1px 0 rgba(255,255,255,0.15);
+      transition: opacity 0.15s, transform 0.08s;
+    }
+    .btn:active { transform: translateY(1px); box-shadow: 0 1px 0 #3a7a34; }
+    .btn.secondary {
+      background: var(--surface2);
+      box-shadow: 0 3px 0 rgba(0,0,0,0.3);
+      color: var(--text-dim);
+      margin-top: 8px;
+    }
+
+    /* End modal answer */
+    .answer-box {
+      text-align: center; margin: 10px 0;
+      padding: 12px;
+      background: var(--surface2);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .answer-label { font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); }
+    .answer-word {
+      font-family: 'Nunito', sans-serif; font-weight: 900;
+      font-size: 2rem; letter-spacing: 0.2em;
+      color: var(--correct); margin-top: 2px;
+    }
+
+    /* Install banner */
+    #install-banner {
+      position: fixed;
+      bottom: max(14px, env(safe-area-inset-bottom));
+      left: 50%; transform: translateX(-50%) translateY(120px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 16px;
+      display: flex; align-items: center; gap: 12px;
+      width: min(340px, 92vw);
+      z-index: 400;
+      transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    #install-banner.show { transform: translateX(-50%) translateY(0); }
+    .ib-icon { width: 42px; height: 42px; border-radius: 10px; overflow: hidden; flex-shrink: 0; }
+    .ib-icon img { width: 100%; height: 100%; object-fit: cover; }
+    .ib-text { flex: 1; }
+    .ib-text strong { display: block; font-size: 0.82rem; color: var(--text); font-weight: 700; }
+    .ib-text small { font-size: 0.65rem; color: var(--text-dim); }
+    .ib-install {
+      background: var(--correct);
+      border: none; border-radius: 8px;
+      color: #fff; font-family: 'Nunito', sans-serif;
+      font-weight: 800; font-size: 0.72rem;
+      padding: 9px 14px; cursor: pointer; white-space: nowrap;
+      box-shadow: 0 2px 0 #3a7a34;
+    }
+    .ib-dismiss {
+      background: none; border: none; color: var(--text-dim);
+      cursor: pointer; font-size: 1rem; padding: 3px; flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <button class="icon-btn" id="help-btn" aria-label="How to play">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+        <circle cx="12" cy="17" r="0.5" fill="currentColor"/>
+      </svg>
+    </button>
+
+    <div class="wordmark">
+      <span class="wordmark-title">WORDLE</span>
+      <span class="wordmark-sub">Puzzle</span>
+    </div>
+
+    <div class="header-btns">
+      <button class="icon-btn" id="new-round-btn" aria-label="New game" title="New Game">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="1 4 1 10 7 10"/>
+          <path d="M3.51 15a9 9 0 1 0 .49-3.51"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="stats-btn" aria-label="Statistics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="18" y="3" width="3" height="18" rx="1"/>
+          <rect x="10.5" y="8" width="3" height="13" rx="1"/>
+          <rect x="3" y="13" width="3" height="8" rx="1"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- MINI STATS -->
+  <div class="mini-stats">
+    <div class="ms-item"><span class="ms-val" id="ms-played">0</span><span class="ms-label">Played</span></div>
+    <div class="ms-item"><span class="ms-val" id="ms-win">0%</span><span class="ms-label">Win %</span></div>
+    <div class="ms-item"><span class="ms-val" id="ms-streak">0</span><span class="ms-label">Streak</span></div>
+    <div class="ms-item"><span class="ms-val" id="ms-best">0</span><span class="ms-label">Best</span></div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast"></div>
+
+  <!-- BOARD -->
+  <div id="board-wrap">
+    <div id="board"></div>
+  </div>
+
+  <!-- KEYBOARD -->
+  <div id="keyboard">
+    <div class="kb-row" id="kb-r1"></div>
+    <div class="kb-row" id="kb-r2"></div>
+    <div class="kb-row" id="kb-r3"></div>
+  </div>
+
+  <!-- HOW TO PLAY -->
+  <div class="overlay" id="help-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">How to Play</span>
+        <button class="modal-close" id="help-close">✕</button>
+      </div>
+      <p>Guess the <strong>WORDLE</strong> in 6 tries. Each guess must be a valid 5-letter word. Hit <strong>ENTER</strong> to submit.</p>
+      <p>After each guess the tiles change colour to show how close your guess was:</p>
+      <hr class="divider">
+      <div class="ex-row">
+        <div class="ex-tile correct">W</div>
+        <div class="ex-tile">E</div>
+        <div class="ex-tile">A</div>
+        <div class="ex-tile">R</div>
+        <div class="ex-tile">Y</div>
+      </div>
+      <p><strong style="color:var(--correct)">W</strong> is in the word and in the correct spot.</p>
+      <div class="ex-row">
+        <div class="ex-tile">P</div>
+        <div class="ex-tile present">I</div>
+        <div class="ex-tile">L</div>
+        <div class="ex-tile">L</div>
+        <div class="ex-tile">S</div>
+      </div>
+      <p><strong style="color:var(--present)">I</strong> is in the word but in the wrong spot.</p>
+      <div class="ex-row">
+        <div class="ex-tile">V</div>
+        <div class="ex-tile">A</div>
+        <div class="ex-tile">G</div>
+        <div class="ex-tile absent">U</div>
+        <div class="ex-tile">E</div>
+      </div>
+      <p><strong style="color:var(--absent-txt)">U</strong> is not in the word in any spot.</p>
+      <button class="btn" id="help-play">Let's Play!</button>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="overlay" id="stats-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Statistics</span>
+        <button class="modal-close" id="stats-close">✕</button>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-item"><div class="stat-num" id="st-played">0</div><div class="stat-label">Played</div></div>
+        <div class="stat-item"><div class="stat-num" id="st-win">0</div><div class="stat-label">Win %</div></div>
+        <div class="stat-item"><div class="stat-num" id="st-streak">0</div><div class="stat-label">Streak</div></div>
+        <div class="stat-item"><div class="stat-num" id="st-best">0</div><div class="stat-label">Best</div></div>
+      </div>
+      <hr class="divider">
+      <p style="font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;">Guess Distribution</p>
+      <div class="dist" id="dist-chart"></div>
+      <button class="btn secondary" id="stats-close2">Close</button>
+    </div>
+  </div>
+
+  <!-- END GAME -->
+  <div class="overlay" id="end-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="end-title">Brilliant!</span>
+        <button class="modal-close" id="end-close">✕</button>
+      </div>
+      <div class="answer-box" id="end-answer-box" style="display:none">
+        <div class="answer-label">The word was</div>
+        <div class="answer-word" id="end-answer"></div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-item"><div class="stat-num" id="es-played">0</div><div class="stat-label">Played</div></div>
+        <div class="stat-item"><div class="stat-num" id="es-win">0</div><div class="stat-label">Win %</div></div>
+        <div class="stat-item"><div class="stat-num" id="es-streak">0</div><div class="stat-label">Streak</div></div>
+        <div class="stat-item"><div class="stat-num" id="es-best">0</div><div class="stat-label">Best</div></div>
+      </div>
+      <button class="btn" id="new-game-btn">New Game</button>
+      <button class="btn secondary" id="end-close2">Close</button>
+    </div>
+  </div>
+
+  <!-- INSTALL BANNER -->
+  <div id="install-banner">
+    <div class="ib-icon"><img src="icons/icon-192.png" alt="app icon"/></div>
+    <div class="ib-text">
+      <strong>Install Wordle Puzzle</strong>
+      <small>Play offline, anytime</small>
+    </div>
+    <button class="ib-install" id="ib-install-btn">Install</button>
+    <button class="ib-dismiss" id="ib-dismiss">✕</button>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
